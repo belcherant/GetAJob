@@ -4,6 +4,17 @@ Webpage for CSC 131 section 4 group 5
 ### Description
 Our job platform is a web-based system that connects contractors and clients to small or large job opportunities. Our purpose is to provide an easy to use, streamlined system where someone can list / find jobs no matter the size.
 
+### Features
+- In-site Intersctive Map
+- Report / Banning
+- Client Job Posting / Edit
+- Contractor Job Apply
+- Client / Contractor Messaging
+- Account Login
+- Account Signup
+- Account Verification
+- Sign-Up Authentication
+
 ### Contact Information
 - anthonybelcher@csus.edu
 - mboyle@csus.edu
