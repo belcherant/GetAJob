@@ -142,7 +142,7 @@ class User(Base):
 
     # utils
     def _validate_password(self, password:str)->tuple[bool, str]:
-        # chekc password length
+        # check password length
         if len(password) < 8:
             return False, "password too short"
         
@@ -151,7 +151,9 @@ class User(Base):
             return False, "need at least one special character"
 
     def _validate_user_name(self, user_name:str)->tuple[bool, str]:
-        pass
+        # check user name length
+        if len(user_name) < 4:
+            return False, "username too short"
 
     # actions
     def create_account(self, user_name:str, password:str, email:str)->tuple[bool, str]:
