@@ -142,7 +142,13 @@ class User(Base):
 
     # utils
     def _validate_password(self, password:str)->tuple[bool, str]:
-        pass
+        # chekc password length
+        if len(password) < 8:
+            return False, "password too short"
+        
+        # check for special character requirement
+        if any(["_", ".", "#", "@", "!"]) not in password:
+            return False, "need at least one special character"
 
     def _validate_user_name(self, user_name:str)->tuple[bool, str]:
         pass
@@ -307,9 +313,6 @@ class Post_tag(Base):
         if not res[0]:
             return res
         return True, [val["post_id"] for val in res[1]]
-    
-
-
 class Tag(Base):
     def __init__(self, cur, conn):
         field = {
