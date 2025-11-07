@@ -65,7 +65,7 @@ class Base:
             self._conn.rollback()
             return False, error_msg
         
-    # warning please always send in both params or deletes all rows
+    # warning please always send in both params or will deletes all rows
     def _delete_data(self, condition_clause:str="1=1", condition_val:list=[])->tuple[bool, str]:
         try:
             with self._lock:
@@ -214,7 +214,7 @@ class User(Base):
         res = self._select_data("user_name=?", [user_name], ["user_id"])
         if not res[0]:
             return res
-        return True, res[0][1]
+        return True, res[1][0]["user_id"]
 
     # log in
     def verify_password(self, user_name:str, password:str)->tuple[bool, str]:
@@ -265,8 +265,9 @@ class User(Base):
     def unban_user(self, user_name:str)->tuple[bool, str]:
         return self._update_data({"is_banned":0}, "user_name=?", [user_name])
 
+    # delete account
     def delete_user(self, user_name:str):
-        pass
+        return self._delete_data(f"user_name=?", [user_name])
 
 class Post(Base):
     def __init__(self, cur, conn):
@@ -473,7 +474,11 @@ def test_user(db:Database_api):
     print(res)
     print()
     print("update user profile")
-    res = db.user.update_user_profile("test_user", email="new@gmail.com", phone="")
+    res = db.user.update_user_profile("test_user", email="new@gmail.com", phone="1234567890", first_name="user_frist_name", last_name="user_last_name")
+    print(res)
+    print()
+    print("get user after updated")
+    res = db.user.get_user_profile("test_user")
     print(res)
     print()
     
@@ -522,6 +527,27 @@ def test_user(db:Database_api):
     res = db.user.verify_password("test_user", "new_password")
     print(res)
     print()
+
+    print("---- test get user id ----")
+    print("get user id:")
+    res = db.user.get_user_id("test_user")
+    print(res)
+    print()
+
+    print("---- test update user name / delete user ----")
+    print("update user name")
+    res = db.user.update_user_name("new_user", "test_user")
+    print(res)
+    print()
+    # shows (True, 'success') even didn't delete any user
+    print("delete user with old name")
+    res = db.user.delete_user("test_user")
+    print(res)
+    print()
+    # print("delete user with new name")
+    # res = db.user.delete_user("new_user")
+    # print(res)
+    # print()
 
 if __name__ == "__main__":
     delete_db()
