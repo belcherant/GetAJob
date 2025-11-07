@@ -422,6 +422,10 @@ def test_user_function(db:Database_api):
     res = db.user.create_account("test_user", "test_password", "example@gmail.com")
     print(res)
     print()
+    print("insert ")
+    res = db.user.create_account("test_user", "test_password", "example@gmail.com")
+    print(res)
+    print()
     print("get the user by user name")
     res = db.user.get_user_profile("test_user")
     print(res)
@@ -458,7 +462,7 @@ def test_user_function(db:Database_api):
     res = db.user.verify_password("test_user", "test_password")
     print(res)
     print()
-    
+
 if __name__ == "__main__":
     delete_db()
     db = Database_api()
