@@ -1,11 +1,10 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
-import datetime
-import random
+from db import Database_api
 import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
+db = Database_api()
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 app.secret_key = os.urandom(24)
 
@@ -16,8 +15,10 @@ def home():
 @app.route('/login', methods=["GET", "POST"])
 def login_page():
     if request.method == "POST":
-        print(f"user name: {request.form.get('username')}")
-        print(f"password: {request.form.get('password')}")
+        user_name = request.form.get('username')
+        password = request.form.get('password')
+        res = db.user.verify_password(user_name, password)
+        print(res)
 
     return render_template('login.html', title='login')
 

@@ -1,5 +1,7 @@
 import sqlite3
 import bcrypt
+import os
+import threading
 
 DB_PATH = "test.db"
 DEFULT_TAGS = ["test1", "test2", "test3", "test4", "test5"]
@@ -32,12 +34,15 @@ class Base:
     def _create_table(self)->None:
         ### fix create table with constraints
         field = ", ".join([key+" "+" ".join(val) for key, val in self._field.items()])
+        # test 
+        # print(f"CREATE TABLE IF NOT EXISTS {self._name} ({field})")
         self._cur.execute(f"CREATE TABLE IF NOT EXISTS {self._name} ({field})")
         self._conn.commit()
 
-    def insert_data(self, data:dict)->tuple[bool, str]:
+    def _insert_data(self, data:dict)->tuple[bool, str]:
         try:
             # Validate all columns
+            # print(data)
             v = self.validate_columns(data.keys())
             if not v[0]:
                 return v
@@ -58,7 +63,7 @@ class Base:
             return False, error_msg
         
     # warning please always send in both params or deletes all rows
-    def delete_data(self, condition_clause:str="1=1", condition_val:list=[])->tuple[bool, str]:
+    def _delete_data(self, condition_clause:str="1=1", condition_val:list=[])->tuple[bool, str]:
         try:
             
             self._cur.execute(f"""
@@ -74,7 +79,7 @@ class Base:
             self._conn.rollback()
             return False, error_msg
 
-    def select_data(self, condition_clause:str="1=1", condition_val:list=[], column:list[str]=["*"])->tuple[bool, list[dict]|str]:
+    def _select_data(self, condition_clause:str="1=1", condition_val:list=[], column:list[str]=["*"])->tuple[bool, list[dict]|str]:
         try:
             column = ", ".join(column)
             
@@ -91,7 +96,7 @@ class Base:
             error_msg = f"select failed: {e}"
             return False, error_msg
     
-    def update_data(self, new_data:dict, condition_clause:str="1=1", condition_val:list=[])->tuple[bool, str]:
+    def _update_data(self, new_data:dict, condition_clause:str="1=1", condition_val:list=[])->tuple[bool, str]:
         try:
             # key validation check
             check = self.validate_columns(new_data.keys())
@@ -120,12 +125,12 @@ class Base:
 class User(Base):
     def __init__(self, cur, conn):
         field = {
-            "user_id": ["INTERGER", "PRIMARY KEY"],
+            "user_id": ["INTEGER", "PRIMARY KEY"],
             "user_name": ["TEXT", "UNIQUE", "NOT NULL"],
             "email": ["TEXT", "UNIQUE", "NOT NULL"],
             "phone": ["TEXT", "UNIQUE"],
             "password_hash": ["BLOB", "NOT NULL"],
-            "age": ["INTERGER", ],
+            "age": ["INTEGER", ],
             "address": ["TEXT",],
             "first_name": ["TEXT", ],
             "last_name": ["TEXT", ],
@@ -134,7 +139,7 @@ class User(Base):
             "pfp":["BLOB"],
             "is_admin": ["BOOLEAN", "DEFAULT 0"],
             "is_banned": ["BOOLEAN", "DEFAULT 0"],
-            "report_id": ["INTERGER", "UNIQUE"],
+            "report_id": ["INTEGER", "UNIQUE"],
             "create_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"],
             "modify_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"]
         }
@@ -170,11 +175,11 @@ class User(Base):
             return v2
 
         param = {"user_name":user_name, "password_hash":self._hash(password), "email":email}
-        return super().insert_data(param)
+        return super()._insert_data(param)
     
     # get
     def get_user_profile(self, user_name:str)->tuple[bool, dict|str]:
-        res = self.select_data("user_name=?", [user_name], 
+        res = self._select_data("user_name=?", [user_name], 
         ["email", "phone", "age", "address", "first_name", "last_name", 
          "location", "profile", "pfp"])
         
@@ -184,7 +189,7 @@ class User(Base):
         return True, res[1][0]
     
     def if_user_banned(self, user_name:str)->tuple[bool, bool|str]:
-        res = self.select_data("user_name=?", [user_name], ["is_banned"])
+        res = self._select_data("user_name=?", [user_name], ["is_banned"])
         if not res[0]:
             return res
         
@@ -192,7 +197,7 @@ class User(Base):
         return res
 
     def get_user_id(self, user_name:str)->tuple[bool, int|str]:
-        res = self.select_data("user_name=?", [user_name], ["user_id"])
+        res = self._select_data("user_name=?", [user_name], ["user_id"])
         if not res[0]:
             return res
         return True, res[0][1]
@@ -200,7 +205,7 @@ class User(Base):
     # log in
     def verify_password(self, user_name:str, password:str)->tuple[bool, str]:
         try:
-            res = self.select_data("user_name=?", [user_name], ["password_hash"])
+            res = self._select_data("user_name=?", [user_name], ["password_hash"])
             if not res[0]:
                 return False, res[1]
             
@@ -218,14 +223,14 @@ class User(Base):
         if not v[0]:
             return v
         
-        return self.update_data({"user_name": new_user_name}, "user_name=?", [old_user_name])
+        return self._update_data({"user_name": new_user_name}, "user_name=?", [old_user_name])
     
     def update_password(self, user_name:str, new_password:str)->tuple[bool, str]:
         v = self._validate_password(new_password)
         if not v[0]:
             return v
         
-        return self.update_data({"password_hash": self._hash(new_password)}, "user_name=?", [user_name])
+        return self._update_data({"password_hash": self._hash(new_password)}, "user_name=?", [user_name])
 
     def update_user_profile(self, user_name:str, email:str=None, phone:str=None, 
                             age:int=None, address:str=None, first_name:str=None, 
@@ -237,22 +242,22 @@ class User(Base):
         }
         param = {k: v for k, v in param.items() if v is not None}
 
-        return self.update_data(param, "user_name=?", [user_name])
+        return self._update_data(param, "user_name=?", [user_name])
 
     # admin
     def ban_user(self, user_name:str)->tuple[bool, str]:
-        return self.update_data({"is_banned":1}, "user_name=?", [user_name])
+        return self._update_data({"is_banned":1}, "user_name=?", [user_name])
 
     def unban_user(self, user_name:str)->tuple[bool, str]:
-        return self.update_data({"is_banned":0}, "user_name=?", [user_name])
+        return self._update_data({"is_banned":0}, "user_name=?", [user_name])
 
 class Post(Base):
     def __init__(self, cur, conn):
         field = {
-            "post_id": ["INTERGER", "PRIMARY KEY"],
+            "post_id": ["INTEGER", "PRIMARY KEY"],
             "title": ["TEXT", "NOT NULL"],
             "description": ["TEXT", "NOT NULL"],
-            "owner_id": ["INTERGER", "NOT NULL", "REFERENCES user(user_id) ON DELETE CASCADE"],
+            "owner_id": ["INTEGER", "NOT NULL", "REFERENCES user(user_id) ON DELETE CASCADE"],
             "create_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"],
             "modify_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"],
 
@@ -260,25 +265,25 @@ class Post(Base):
         super().__init__(cur=cur, conn=conn, name="post", field=field)
 
     def create_post(self, title:str, description:str, owner_id:int):
-        return self.insert_data({"title":title, "description":description, "owner_id":owner_id})
+        return self._insert_data({"title":title, "description":description, "owner_id":owner_id})
 
     def delete_post(self, post_id:int):
-        return self.delete_data("post_id=?", [post_id])
+        return self._delete_data("post_id=?", [post_id])
 
     def update_post(self, post_id:int):
-        return self.update_data()
+        return self._update_data()
 
     def select_user_post(self, user_id:int):
-        return self.select_data("user_id=?", [user_id])
+        return self._select_data("user_id=?", [user_id])
     
 
 
 class Message(Base):
     def __init__(self, cur, conn):
         field = {
-            "message_id":["INTERGER", "PRIMARY KEY"],
-            "sender_id":["INTERGER", "NOT NULL", "REFERENCES user(user_id)"],
-            "receiver_id":["INTERGER", "NOT NULL", "REFERENCES user(user_id)"],
+            "message_id":["INTEGER", "PRIMARY KEY"],
+            "sender_id":["INTEGER", "NOT NULL", "REFERENCES user(user_id)"],
+            "receiver_id":["INTEGER", "NOT NULL", "REFERENCES user(user_id)"],
             "if_read":["BOOLEAN", "DEFAULT 0"],
             "message":["TEXT", "NOT NULL"],
             "timestamp":["DATETIME", "DEFAULT CURRENT_TIMESTAMP"],
@@ -286,39 +291,40 @@ class Message(Base):
         super().__init__(cur=cur, conn=conn, name="message", field=field)
 
     def get_chat_room(self, user1:int, user2:int):
-        return self.select_data("(sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?)", [user1, user2, user2, user1])
+        return self._select_data("(sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?)", [user1, user2, user2, user1])
 
     def read(self, sender_id:int, receiver_id:int):
-        return self.update_data({"if_read":1}, "sender_id=? AND receiver_id=?", [sender_id, receiver_id])
+        return self._update_data({"if_read":1}, "sender_id=? AND receiver_id=?", [sender_id, receiver_id])
 
     def send_message(self, sender_id:int, receiver_id:int, msg:str):
-        return self.insert_data({"sender_id":sender_id, "receiver_id":receiver_id, "message":msg})
+        return self._insert_data({"sender_id":sender_id, "receiver_id":receiver_id, "message":msg})
     
 class Post_tag(Base):
     def __init__(self, cur, conn):
         field = {
-            "post_id": ["INTERGER", "NOT NULL", "REFERENCES post(post_id) ON DELETE CASCADE"],
-            "tag_id": ["INTERGER", "NOT NULL", "REFERENCES tag(tag_id) ON DELETE CASCADE"],
-            "PRIMARY KEY": ["post_id", "tag_id"]
+            "post_id": ["INTEGER", "NOT NULL", "REFERENCES post(post_id) ON DELETE CASCADE"],
+            "tag_id": ["INTEGER", "NOT NULL", "REFERENCES tag(tag_id) ON DELETE CASCADE"],
+            "PRIMARY KEY": ["(post_id, tag_id)"]
         }
 
         super().__init__(cur=cur, conn=conn, name="post_tag", field=field)
 
     def add_tag_to_post(self, post_id:int, tag_id:int):
-        return self.insert_data({"post_id":post_id, "tag_id":tag_id})
+        return self._insert_data({"post_id":post_id, "tag_id":tag_id})
 
     def delete_tag_from_post(self, post_id:int, tag_id:int):
-        return self.delete_data({"post_id":post_id, "tag_id":tag_id})
+        return self._delete_data({"post_id":post_id, "tag_id":tag_id})
 
     def get_tagged_post_id(self, tag_id:int):
-        res = self.select_data("tag_id=?", [tag_id], ["post_id"])
+        res = self._select_data("tag_id=?", [tag_id], ["post_id"])
         if not res[0]:
             return res
         return True, [val["post_id"] for val in res[1]]
+    
 class Tag(Base):
     def __init__(self, cur, conn):
         field = {
-            "tag_id": ["INTERGER", "PRIMARY KEY"],
+            "tag_id": ["INTEGER", "PRIMARY KEY"],
             "tag_name": ["TEXT", "UNIQUE", "NOT NULL"]
         }
 
@@ -329,13 +335,13 @@ class Tag(Base):
             self.create_tag(tag)
 
     def create_tag(self, tag_name:str)->tuple[bool, str]:
-        return self.insert_data({"tag_name", tag_name})
+        return self._insert_data({"tag_name": tag_name})
 
     def delete_tag(self, tag_name:str)->tuple[bool, str]:
-        return self.delete_data("tag_name=?", [tag_name])
+        return self._delete_data("tag_name=?", [tag_name])
 
     def get_tag_id(self, tag_name:str):
-        res = self.select_data("tag_name=?", [tag_name], ["tag_id"])
+        res = self._select_data("tag_name=?", [tag_name], ["tag_id"])
         if not res[0]:
             return res
         return True, res[1][0]["tag_id"]
@@ -344,28 +350,28 @@ class Tag(Base):
 class Report(Base):
     def __init__(self, cur, conn):
         field = {
-            "report_id": ["INTERGER", "PRIMARY KEY"],
-            "user_id": ["INTERGER", "NOT NULL", "REFERENCES user(user_id)"],
+            "report_id": ["INTEGER", "PRIMARY KEY"],
+            "user_id": ["INTEGER", "NOT NULL", "REFERENCES user(user_id)"],
             "description": ["TEXT", "NOT NULL"]
         }
         super().__init__(cur=cur, conn=conn, name="report", field=field)
 
     # user
     def report_user(self, user_id:int, description:str)->tuple[bool, str]:
-        return self.insert_data({"user_id":user_id, "description":description})
+        return self._insert_data({"user_id":user_id, "description":description})
 
     # admin
     def get_reported_users(self)->tuple[bool, list[str]|str]:
-        return self.select_data(column=["DISTINCT user_id"])
+        return self._select_data(column=["DISTINCT user_id"])
 
     def get_user_reports(self, user_id:int)->tuple[bool, list[str]|str]:
-        return self.select_data("user_id=?", [user_id], ["report_id", "description"])
+        return self._select_data("user_id=?", [user_id], ["report_id", "description"])
 
     def delete_report(self, report_id:int)->tuple[bool, str]:
-        return self.delete_data("report_id=?", [report_id])
+        return self._delete_data("report_id=?", [report_id])
 
 
-class Data_base_api:
+class Database_api:
     def __init__(self, db_path:str=DB_PATH):
         self._conn = sqlite3.connect(db_path)
 
@@ -384,5 +390,33 @@ class Data_base_api:
 
         # enforce foreign key after load all tables
         self._conn.execute("PRAGMA foreign_keys = ON;")
+        self._conn.commit()
+
+    def terminal(self):
+        while True:
+            qury = input()
+            if qury == "commit":
+                self._conn.commit()
+
+            try:
+                self._cur.execute(qury)
+                rows = self._cur.fetchall()
+                rows = [dict(row) for row in rows]
+                print(rows)
+            except Exception as e:
+                print(e)
+
+            
+def delete_db():
+    if os.path.exists(DB_PATH):
+        os.remove(DB_PATH)
+
+def test_user_function(db:Database_api):
+    db.user.create_account("test_user", )
+
+if __name__ == "__main__":
+    delete_db()
+    db = Database_api()
+    
 
 ### add update modify time on all update function
