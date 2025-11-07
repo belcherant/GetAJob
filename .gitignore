@@ -40,5 +40,6 @@
 # debug information files
 *.dwo
 
+__pycache__/
 *test*
 *.db*
