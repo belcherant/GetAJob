@@ -18,10 +18,10 @@ class Base:
     # ----util----
     @staticmethod
     def _hash(data:str)->bytes:
-        hashed = bcrypt.hashpw(data, bcrypt.gensalt())
+        hashed = bcrypt.hashpw(data.encode(), bcrypt.gensalt())
         return hashed
     
-    def validate_columns(self, column_name:list)->tuple[bool, str]:
+    def _validate_columns(self, column_name:list)->tuple[bool, str]:
         # Validate all columns
         for column in column_name:
             if column not in self._field:
@@ -43,7 +43,7 @@ class Base:
         try:
             # Validate all columns
             # print(data)
-            v = self.validate_columns(data.keys())
+            v = self._validate_columns(data.keys())
             if not v[0]:
                 return v
                 
@@ -90,6 +90,10 @@ class Base:
 
             rows = self._cur.fetchall()
             rows = [dict(row) for row in rows]
+            # if select is empty
+            if not rows:
+                return False, "data not found"
+            
             return True, rows
         
         except sqlite3.Error as e:
@@ -99,7 +103,7 @@ class Base:
     def _update_data(self, new_data:dict, condition_clause:str="1=1", condition_val:list=[])->tuple[bool, str]:
         try:
             # key validation check
-            check = self.validate_columns(new_data.keys())
+            check = self._validate_columns(new_data.keys())
             if not check[0]:
                 return False, check[1]
             
@@ -152,14 +156,15 @@ class User(Base):
             return False, "password too short"
         
         # check for special character requirement
-        if any(["_", ".", "#", "@", "!"]) not in password:
-            return False, "need at least one special character"
+        # if ["_", ".", "#", "@", "!"] not in password:
+        #     return False, "need at least one special character"
+        return True, "valid password"
 
     def _validate_user_name(self, user_name:str)->tuple[bool, str]:
         # check user name length
         if len(user_name) < 4:
             return False, "username too short"
-
+        return True, "valid password"
     # actions
     def create_account(self, user_name:str, password:str, email:str)->tuple[bool, str]:
         # check requirement 
@@ -182,10 +187,9 @@ class User(Base):
         res = self._select_data("user_name=?", [user_name], 
         ["email", "phone", "age", "address", "first_name", "last_name", 
          "location", "profile", "pfp"])
-        
         if not res[0]:
             return res
-
+        
         return True, res[1][0]
     
     def if_user_banned(self, user_name:str)->tuple[bool, bool|str]:
@@ -193,8 +197,7 @@ class User(Base):
         if not res[0]:
             return res
         
-        res[1] = bool(res[1][0]["is_banned"])
-        return res
+        return True, bool(res[1][0]["is_banned"])
 
     def get_user_id(self, user_name:str)->tuple[bool, int|str]:
         res = self._select_data("user_name=?", [user_name], ["user_id"])
@@ -275,8 +278,6 @@ class Post(Base):
 
     def select_user_post(self, user_id:int):
         return self._select_data("user_id=?", [user_id])
-    
-
 
 class Message(Base):
     def __init__(self, cur, conn):
@@ -393,6 +394,7 @@ class Database_api:
         self._conn.commit()
 
     def terminal(self):
+        print("in terminal")
         while True:
             qury = input()
             if qury == "commit":
@@ -412,11 +414,35 @@ def delete_db():
         os.remove(DB_PATH)
 
 def test_user_function(db:Database_api):
-    db.user.create_account("test_user", )
+    print("insert invalid user")
+    res = db.user.create_account("1", "12345678", "example@gmail.com")
+    print(res)
+    print()
+    print("insert a user:")
+    res = db.user.create_account("test_user", "test_password", "example@gmail.com")
+    print(res)
+    print()
+    print("get the user by user name")
+    res = db.user.get_user_profile("test_user")
+    print(res)
+    print()
+    print("get non-exist user by user name")
+    res = db.user.get_user_profile("do_not_exist")
+    print(res)
+    print()
+    print("check if user is banned")
+    res = db.user.if_user_banned("test_user")
+    print(res)
+    print()
+    print("ban user")
+    res = db.user.ban_user("test_user")
+    print(res)
 
 if __name__ == "__main__":
     delete_db()
     db = Database_api()
+    test_user_function(db)
+    db.terminal()
     
 
 ### add update modify time on all update function
