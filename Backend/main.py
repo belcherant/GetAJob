@@ -52,6 +52,7 @@ def jobs():
     if q:
         jobs = [j for j in JOB_DATA
                 if q in j["title"].lower() or q in j["description"].lower()]
+
     return render_template('jobs.html', jobs=jobs, title='Jobs')
 
 @app.route('/job/<int:job_id>')
@@ -66,8 +67,6 @@ def job_detail(job_id):
 def create_listing():
     # placeholder—you can render a form here later
     return "<h1>Create Listing (coming soon)</h1>"
-
-from flask import render_template
 
 @app.route('/maps')
 def maps():
