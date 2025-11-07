@@ -8,6 +8,7 @@ DEFULT_TAGS = ["test1", "test2", "test3", "test4", "test5"]
 
 class Base:
     def __init__(self, cur:sqlite3.Cursor, conn:sqlite3.Connection, name:str, field:dict):
+        self._lock = threading.Lock()
         self._cur = cur
         self._conn = conn
         self._name = name
@@ -36,8 +37,9 @@ class Base:
         field = ", ".join([key+" "+" ".join(val) for key, val in self._field.items()])
         # test 
         # print(f"CREATE TABLE IF NOT EXISTS {self._name} ({field})")
-        self._cur.execute(f"CREATE TABLE IF NOT EXISTS {self._name} ({field})")
-        self._conn.commit()
+        with self._lock:
+            self._cur.execute(f"CREATE TABLE IF NOT EXISTS {self._name} ({field})")
+            self._conn.commit()
 
     def _insert_data(self, data:dict)->tuple[bool, str]:
         try:
@@ -50,10 +52,11 @@ class Base:
             columns = ", ".join(data.keys())
             placeholders = ", ".join("?" for _ in data) 
             val = list(data.values())
-            self._cur.execute(f"""
-                INSERT INTO {self._name} ({columns}) VALUES ({placeholders})
-            """, val)
-            self._conn.commit()
+            with self._lock:
+                self._cur.execute(f"""
+                    INSERT INTO {self._name} ({columns}) VALUES ({placeholders})
+                """, val)
+                self._conn.commit()
             return True, "success"
 
         except sqlite3.Error as e:
@@ -65,12 +68,12 @@ class Base:
     # warning please always send in both params or deletes all rows
     def _delete_data(self, condition_clause:str="1=1", condition_val:list=[])->tuple[bool, str]:
         try:
-            
-            self._cur.execute(f"""
-            DELETE FROM {self._name} WHERE {condition_clause}
-            """, condition_val)
+            with self._lock:
+                self._cur.execute(f"""
+                DELETE FROM {self._name} WHERE {condition_clause}
+                """, condition_val)
 
-            self._conn.commit()
+                self._conn.commit()
             return True, "success"
         
         except sqlite3.Error as e:
@@ -82,19 +85,19 @@ class Base:
     def _select_data(self, condition_clause:str="1=1", condition_val:list=[], column:list[str]=["*"])->tuple[bool, list[dict]|str]:
         try:
             column = ", ".join(column)
-            
-            self._cur.execute(f"""
-            SELECT {column} FROM {self._name}
-                WHERE {condition_clause}
-            """, condition_val)
+            with self._lock:
+                self._cur.execute(f"""
+                SELECT {column} FROM {self._name}
+                    WHERE {condition_clause}
+                """, condition_val)
 
-            rows = self._cur.fetchall()
-            rows = [dict(row) for row in rows]
-            # if select is empty
-            if not rows:
-                return False, "data not found"
+                rows = self._cur.fetchall()
+                rows = [dict(row) for row in rows]
+                # if select is empty
+                if not rows:
+                    return False, "data not found"
             
-            return True, rows
+                return True, rows
         
         except sqlite3.Error as e:
             error_msg = f"select failed: {e}"
@@ -112,12 +115,13 @@ class Base:
             set_val = list(new_data.values())
             
             val = set_val+condition_val
-            self._cur.execute(f"""
-            UPDATE {self._name} SET {set_clause}
-            WHERE {condition_clause}
-            """, val)
+            with self._lock:
+                self._cur.execute(f"""
+                UPDATE {self._name} SET {set_clause}
+                WHERE {condition_clause}
+                """, val)
 
-            self._conn.commit()
+                self._conn.commit()
             return True, "success"
         
         except sqlite3.Error as e:
@@ -374,7 +378,7 @@ class Report(Base):
 
 class Database_api:
     def __init__(self, db_path:str=DB_PATH):
-        self._conn = sqlite3.connect(db_path)
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
 
         # set return sqlite3.Row objects when selecting
         self._conn.row_factory = sqlite3.Row
@@ -401,6 +405,7 @@ class Database_api:
                 self._conn.commit()
 
             try:
+            
                 self._cur.execute(qury)
                 rows = self._cur.fetchall()
                 rows = [dict(row) for row in rows]

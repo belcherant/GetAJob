@@ -18,8 +18,13 @@ def login_page():
         user_name = request.form.get('username')
         password = request.form.get('password')
         res = db.user.verify_password(user_name, password)
-        print(res)
+        if res[0]:
+            # add to session
+            return render_template()
 
+        else:
+            pass
+        
     return render_template('login.html', title='login')
 
 @app.errorhandler(404)
