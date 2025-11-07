@@ -169,6 +169,13 @@ class User(Base):
         if len(user_name) < 4:
             return False, "username too short"
         return True, "valid password"
+    
+    def _validate_phone(self, phone:str)->tuple[bool, str]:
+        pass
+
+    def _validate_email(self, email:str)->tuple[bool, str]:
+        pass
+
     # actions
     def create_account(self, user_name:str, password:str, email:str)->tuple[bool, str]:
         # check requirement 
@@ -257,6 +264,9 @@ class User(Base):
 
     def unban_user(self, user_name:str)->tuple[bool, str]:
         return self._update_data({"is_banned":0}, "user_name=?", [user_name])
+
+    def delete_user(self, user_name:str):
+        pass
 
 class Post(Base):
     def __init__(self, cur, conn):
@@ -350,16 +360,15 @@ class Tag(Base):
         if not res[0]:
             return res
         return True, res[1][0]["tag_id"]
-
     
-class Report(Base):
+class User_report(Base):
     def __init__(self, cur, conn):
         field = {
             "report_id": ["INTEGER", "PRIMARY KEY"],
             "user_id": ["INTEGER", "NOT NULL", "REFERENCES user(user_id)"],
             "description": ["TEXT", "NOT NULL"]
         }
-        super().__init__(cur=cur, conn=conn, name="report", field=field)
+        super().__init__(cur=cur, conn=conn, name="user_report", field=field)
 
     # user
     def report_user(self, user_id:int, description:str)->tuple[bool, str]:
@@ -391,7 +400,7 @@ class Database_api:
         self.message = Message(self._cur, self._conn)
         self.post = Post(self._cur, self._conn)
         self.post_tag = Post_tag(self._cur, self._conn)
-        self.report = Report(self._cur, self._conn)
+        self.report = User_report(self._cur, self._conn)
 
         # enforce foreign key after load all tables
         self._conn.execute("PRAGMA foreign_keys = ON;")
@@ -413,13 +422,34 @@ class Database_api:
             except Exception as e:
                 print(e)
 
-            
+
 def delete_db():
     if os.path.exists(DB_PATH):
         os.remove(DB_PATH)
 
-def test_user_function(db:Database_api):
-    print("insert invalid user")
+def test_post(db:Database_api):
+    pass
+
+def test_message(db:Database_api):
+    pass
+
+def test_post_tag(db:Database_api):
+    pass
+
+def test_tag(db:Database_api):
+    pass
+
+def test_user_report(db:Database_api):
+    pass
+
+# do we need a post report seperate from user report? 
+def test_post_report(db:Database_api):
+    pass
+
+def test_user(db:Database_api):
+    # test create account
+    print("---- test create account ----")
+    print("insert invalid user:")
     res = db.user.create_account("1", "12345678", "example@gmail.com")
     print(res)
     print()
@@ -427,10 +457,13 @@ def test_user_function(db:Database_api):
     res = db.user.create_account("test_user", "test_password", "example@gmail.com")
     print(res)
     print()
-    print("insert ")
+    print("insert duplicate user:")
     res = db.user.create_account("test_user", "test_password", "example@gmail.com")
     print(res)
     print()
+
+    # test get/update user profile
+    print("---- test get user profile ----" )
     print("get the user by user name")
     res = db.user.get_user_profile("test_user")
     print(res)
@@ -439,6 +472,13 @@ def test_user_function(db:Database_api):
     res = db.user.get_user_profile("do_not_exist")
     print(res)
     print()
+    print("update user profile")
+    res = db.user.update_user_profile("test_user", email="new@gmail.com", phone="")
+    print(res)
+    print()
+    
+    # test ban/if_banned/unban function
+    print("---- test ban/if_banned/unban function ----")
     print("check if user is banned")
     res = db.user.if_user_banned("test_user")
     print(res)
@@ -459,6 +499,9 @@ def test_user_function(db:Database_api):
     res = db.user.if_user_banned("test_user")    
     print(res)
     print()
+    
+    # test verify/update password
+    print("---- test verify/update password ----")
     print("verify password (if login) with wrong password")
     res = db.user.verify_password("test_user", "test")
     print(res)
@@ -467,11 +510,23 @@ def test_user_function(db:Database_api):
     res = db.user.verify_password("test_user", "test_password")
     print(res)
     print()
+    print("update password")
+    res = db.user.update_password("test_user", "new_password")
+    print(res)
+    print()
+    print("verify with old password")
+    res = db.user.verify_password("test_user", "test_password")
+    print(res)
+    print()
+    print("verify with new password")
+    res = db.user.verify_password("test_user", "new_password")
+    print(res)
+    print()
 
 if __name__ == "__main__":
     delete_db()
     db = Database_api()
-    test_user_function(db)
+    test_user(db)
     db.terminal()
     
 
