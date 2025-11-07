@@ -12,14 +12,6 @@ app.secret_key = os.urandom(24)
 @app.route('/')
 def home():
     return render_template('index.html', title='Home')
-
-@app.route("/jobs", methods=["GET", "POST"])
-def job_page():
-    if request.method == "GET":
-        query = request.args.get('q')
-        print(query)
-
-    return render_template('jobs.html', title="job Listing")
     
 @app.route('/login', methods=["GET", "POST"])
 def login_page():
