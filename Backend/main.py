@@ -1,23 +1,37 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
-import datetime
-import random
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
+from db import Database_api
 import os
-import sys
+# test data
+JOB_DATA = [
+    {"id": 1, "title": "Frontend Developer", "description": "Build UI with HTML/CSS/JS."},
+    {"id": 2, "title": "Backend Developer", "description": "APIs with Python + Flask."},
+    {"id": 3, "title": "Data Analyst", "description": "SQL, charts, and insights."},
+    {"id": 4, "title": "UX Designer", "description": "Design flows and prototypes."},
+]
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+db = Database_api()
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 app.secret_key = os.urandom(24)
+# demo data (swap for DB later)
+
 
 @app.route('/')
 def home():
     return render_template('index.html', title='Home')
-
+    
 @app.route('/login', methods=["GET", "POST"])
 def login_page():
     if request.method == "POST":
-        print(f"user name: {request.form.get('username')}")
-        print(f"password: {request.form.get('password')}")
+        user_name = request.form.get('username')
+        password = request.form.get('password')
+        res = db.user.verify_password(user_name, password)
+        if res[0]:
+            # add to session
+            return redirect()
+
+        else:
+            pass
 
     return render_template('login.html', title='login')
 
@@ -37,14 +51,6 @@ def signup():
         print(f"password: {request.form.get('password')}")
     return render_template('signup.html', title='Sign Up')
 
-# demo data (swap for DB later)
-JOB_DATA = [
-    {"id": 1, "title": "Frontend Developer", "description": "Build UI with HTML/CSS/JS."},
-    {"id": 2, "title": "Backend Developer", "description": "APIs with Python + Flask."},
-    {"id": 3, "title": "Data Analyst", "description": "SQL, charts, and insights."},
-    {"id": 4, "title": "UX Designer", "description": "Design flows and prototypes."},
-]
-
 @app.route('/jobs')
 def jobs():
     q = request.args.get('q', '').strip().lower()
@@ -52,6 +58,7 @@ def jobs():
     if q:
         jobs = [j for j in JOB_DATA
                 if q in j["title"].lower() or q in j["description"].lower()]
+
     return render_template('jobs.html', jobs=jobs, title='Jobs')
 
 @app.route('/job/<int:job_id>')
