@@ -69,11 +69,6 @@ def job_detail(job_id):
     # Minimal detail page for now:
     return f"<h1>{job['title']}</h1><p>{job['description']}</p>"
 
-@app.route('/create-listing', methods=["GET", "POST"])
-def create_listing():
-    # placeholder—you can render a form here later
-    return "<h1>Create Listing (coming soon)</h1>"
-
 @app.route('/maps')
 def maps():
     # demo data — replace with DB rows (id, title, description, lat, lng, location, type)
@@ -86,6 +81,53 @@ def maps():
          "lat": 38.563, "lng": -121.442, "location":"East Sac", "type":"Part-time"},
     ]
     return render_template('maps.html', jobs=jobs, title='Maps')
+
+@app.route('/dashboard')
+def signedin():
+    # Later, you could check if a user is logged in here
+    # Example: if not session.get("user_id"): return redirect("/login")
+    return render_template('signedin.html', title='Dashboard')
+
+@app.route('/create-listing', methods=["GET", "POST"])
+def create_listing():
+    if request.method == "POST":
+        title = request.form.get("title")
+        description = request.form.get("description")
+        print(f"New Job Listing → Title: {title}, Description: {description}")
+        # later: save to database
+        flash("Job listing created successfully!", "success")
+        return redirect("/jobs")
+    return render_template("create_listing.html", title="Create Listing")
+
+@app.route('/notifications')
+def notifications():
+    notifications = [
+        "You have a new message about your application to Job #2.",
+        "Your job listing #11 was approved."
+    ]
+    return render_template('notifications.html', notifications=notifications, title='Notifications')
+
+@app.route('/messaging', methods=["GET", "POST"])
+def messaging():
+    # Fake in-memory message list (replace with DB later)
+    messages = [
+        {"sender": "Employer", "text": "Hi, are you available for an interview?"}
+    ]
+
+    if request.method == "POST":
+        new_msg = request.form.get("message")
+        if new_msg:
+            messages.append({"sender": "You", "text": new_msg})
+            flash("Message sent!", "success")
+            # In a real app, you'd save it to a database here
+
+    return render_template("messaging.html", messages=messages, title="Messages")
+
+@app.route('/admin')
+def admin():
+    # Later, you could restrict access:
+    # if not session.get("is_admin"): return redirect("/")
+    return render_template('admin.html', title='Admin Panel')
 
 
 if __name__ == '__main__':
