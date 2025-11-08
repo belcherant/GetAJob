@@ -62,8 +62,6 @@ def job_detail(job_id):
     # Minimal detail page for now:
     return f"<h1>{job['title']}</h1><p>{job['description']}</p>"
 
-from flask import render_template
-
 @app.route('/maps')
 def maps():
     # demo data — replace with DB rows (id, title, description, lat, lng, location, type)
