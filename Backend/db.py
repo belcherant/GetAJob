@@ -1,11 +1,10 @@
 import sqlite3
 import bcrypt
-import os
 import threading
 
 DB_PATH = "test.db"
 DEFULT_TAGS = ["test1", "test2", "test3", "test4", "test5"]
-
+    
 class Base:
     def __init__(self, cur:sqlite3.Cursor, conn:sqlite3.Connection, name:str, field:dict):
         self._lock = threading.Lock()
@@ -68,12 +67,23 @@ class Base:
     # warning please always send in both params or will deletes all rows
     def _delete_data(self, condition_clause:str="1=1", condition_val:list=[])->tuple[bool, str]:
         try:
+            # check if user exist
+            res = self._select_data(condition_clause, condition_val)
+            if not res[0]:
+                return res
+            
             with self._lock:
                 self._cur.execute(f"""
                 DELETE FROM {self._name} WHERE {condition_clause}
                 """, condition_val)
 
                 self._conn.commit()
+
+            # check if user still exist
+            res = self._select_data(condition_clause, condition_val)
+            if res[0]:
+                return False, "delete failed: user still exist after deleting"
+            
             return True, "success"
         
         except sqlite3.Error as e:
@@ -120,7 +130,6 @@ class Base:
                 UPDATE {self._name} SET {set_clause}
                 WHERE {condition_clause}
                 """, val)
-
                 self._conn.commit()
             return True, "success"
         
@@ -152,6 +161,22 @@ class User(Base):
             "modify_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"]
         }
         super().__init__(cur=cur, conn=conn, field=field, name="user")
+        self._trigger_update_modify_time()
+
+    # auto update after update
+    def _trigger_update_modify_time(self):
+        self._cur.execute("""
+            CREATE TRIGGER update_user_modify_time
+            AFTER UPDATE ON user
+            FOR EACH ROW
+            WHEN OLD.modify_time = NEW.modify_time
+            BEGIN
+                UPDATE user
+                SET modify_time = CURRENT_TIMESTAMP
+                WHERE user_id = OLD.user_id;
+            END;
+        """)
+        self._conn.commit()
 
     # utils
     def _validate_password(self, password:str)->tuple[bool, str]:
@@ -278,7 +303,6 @@ class Post(Base):
             "owner_id": ["INTEGER", "NOT NULL", "REFERENCES user(user_id) ON DELETE CASCADE"],
             "create_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"],
             "modify_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"],
-
         }
         super().__init__(cur=cur, conn=conn, name="post", field=field)
 
@@ -288,12 +312,18 @@ class Post(Base):
     def delete_post(self, post_id:int):
         return self._delete_data("post_id=?", [post_id])
 
-    def update_post(self, post_id:int):
-        return self._update_data()
+    def update_post(self, post_id:int, title:str=None, description:str=None):
+        return self._update_data({"title":title, "description":description}, "post_id=?", [post_id])
 
+    def select_post(self, post_id:int):
+        return self._select_data("post_id=?", [post_id])
+    
     def select_user_post(self, user_id:int):
-        return self._select_data("user_id=?", [user_id])
+        return self._select_data("owner_id=?", [user_id])
 
+    def get_latest_n_post(self, n:int=10):
+        return self._select_data()
+    
 class Message(Base):
     def __init__(self, cur, conn):
         field = {
@@ -407,153 +437,27 @@ class Database_api:
         self._conn.execute("PRAGMA foreign_keys = ON;")
         self._conn.commit()
 
+    # call terminal to manual check databse for debug 
     def terminal(self):
         print("in terminal")
         while True:
-            qury = input()
-            if qury == "commit":
+            msg = input()
+            if msg == "commit":
                 self._conn.commit()
 
+            elif msg == "rollback":
+                self._conn.rollback()
+
+            elif msg == "q":
+                print("quit terminal")
+                break
+
             try:
-            
-                self._cur.execute(qury)
+                self._cur.execute(msg)
                 rows = self._cur.fetchall()
                 rows = [dict(row) for row in rows]
                 print(rows)
             except Exception as e:
                 print(e)
-
-
-def delete_db():
-    if os.path.exists(DB_PATH):
-        os.remove(DB_PATH)
-
-def test_post(db:Database_api):
-    pass
-
-def test_message(db:Database_api):
-    pass
-
-def test_post_tag(db:Database_api):
-    pass
-
-def test_tag(db:Database_api):
-    pass
-
-def test_user_report(db:Database_api):
-    pass
-
-# do we need a post report seperate from user report? 
-def test_post_report(db:Database_api):
-    pass
-
-def test_user(db:Database_api):
-    # test create account
-    print("---- test create account ----")
-    print("insert invalid user:")
-    res = db.user.create_account("1", "12345678", "example@gmail.com")
-    print(res)
-    print()
-    print("insert a user:")
-    res = db.user.create_account("test_user", "test_password", "example@gmail.com")
-    print(res)
-    print()
-    print("insert duplicate user:")
-    res = db.user.create_account("test_user", "test_password", "example@gmail.com")
-    print(res)
-    print()
-
-    # test get/update user profile
-    print("---- test get user profile ----" )
-    print("get the user by user name")
-    res = db.user.get_user_profile("test_user")
-    print(res)
-    print()
-    print("get non-exist user by user name")
-    res = db.user.get_user_profile("do_not_exist")
-    print(res)
-    print()
-    print("update user profile")
-    res = db.user.update_user_profile("test_user", email="new@gmail.com", phone="1234567890", first_name="user_frist_name", last_name="user_last_name")
-    print(res)
-    print()
-    print("get user after updated")
-    res = db.user.get_user_profile("test_user")
-    print(res)
-    print()
-    
-    # test ban/if_banned/unban function
-    print("---- test ban/if_banned/unban function ----")
-    print("check if user is banned")
-    res = db.user.if_user_banned("test_user")
-    print(res)
-    print()
-    print("ban user")
-    res = db.user.ban_user("test_user")
-    print(res)
-    print()
-    print("check if user is banned")
-    res = db.user.if_user_banned("test_user")
-    print(res)
-    print()
-    print("unban user")
-    res = db.user.unban_user("test_user")
-    print(res)
-    print()
-    print("check if user is banned")
-    res = db.user.if_user_banned("test_user")    
-    print(res)
-    print()
-    
-    # test verify/update password
-    print("---- test verify/update password ----")
-    print("verify password (if login) with wrong password")
-    res = db.user.verify_password("test_user", "test")
-    print(res)
-    print()
-    print("verify password with correct password")
-    res = db.user.verify_password("test_user", "test_password")
-    print(res)
-    print()
-    print("update password")
-    res = db.user.update_password("test_user", "new_password")
-    print(res)
-    print()
-    print("verify with old password")
-    res = db.user.verify_password("test_user", "test_password")
-    print(res)
-    print()
-    print("verify with new password")
-    res = db.user.verify_password("test_user", "new_password")
-    print(res)
-    print()
-
-    print("---- test get user id ----")
-    print("get user id:")
-    res = db.user.get_user_id("test_user")
-    print(res)
-    print()
-
-    print("---- test update user name / delete user ----")
-    print("update user name")
-    res = db.user.update_user_name("new_user", "test_user")
-    print(res)
-    print()
-    # shows (True, 'success') even didn't delete any user
-    print("delete user with old name")
-    res = db.user.delete_user("test_user")
-    print(res)
-    print()
-    # print("delete user with new name")
-    # res = db.user.delete_user("new_user")
-    # print(res)
-    # print()
-
-if __name__ == "__main__":
-    delete_db()
-    db = Database_api()
-    test_user(db)
-    db.terminal()
-    
 
 ### add update modify time on all update function
