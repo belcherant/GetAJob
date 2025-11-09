@@ -10,6 +10,7 @@ JOB_DATA = [
 ]
 
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 db = Database_api()
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 app.secret_key = os.urandom(24)

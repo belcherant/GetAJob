@@ -66,7 +66,7 @@ def test_user(db:Database_api):
 
     # test get/update user profile
     print("---- test get user profile ----" )
-    print("get the user by user name")
+    print("get user by user name")
     res = db.user.get_user_profile("test_user")
     print(res)
     print()
@@ -158,6 +158,7 @@ def apply_test_data(db:Database_api):
         print(f"add {i['user_name']}: {res}")
 
     print("---- finish adding test data ----\n")
+
 if __name__ == "__main__":
     delete_db()
     db = Database_api()

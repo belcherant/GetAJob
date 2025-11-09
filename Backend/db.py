@@ -24,6 +24,7 @@ class Base:
     def _validate_columns(self, column_name:list)->tuple[bool, str]:
         # Validate all columns
         for column in column_name:
+            # check only keys not value of the field 
             if column not in self._field:
                 # add logger later
                 return False, f"invalid column: {column}"
@@ -92,14 +93,35 @@ class Base:
             self._conn.rollback()
             return False, error_msg
 
-    def _select_data(self, condition_clause:str="1=1", condition_val:list=[], column:list[str]=["*"])->tuple[bool, list[dict]|str]:
+    def _select_data(self, condition_clause:str="1=1", condition_val:list=[], 
+                     column:list[str]=["*"], order_by:str=None, limit:int=None, desc:bool=False, offset:int=None)->tuple[bool, list[dict]|str]:
+        
         try:
             column = ", ".join(column)
+            sql = f"SELECT {column} FROM {self._name} WHERE {condition_clause}"
+
+            # select with order
+            if order_by:
+                res = self._validate_columns([order_by])
+                if not res[0]:
+                    return res
+                
+                sql += f"ORDER BY {order_by} "
+                if desc:
+                    sql += "DESC "
+
+            # select with limit
+            if limit:
+                sql += "LIMIT ? "
+                condition_val.append(limit)
+
+            # select with offset
+            if offset:
+                sql += "OFFSET ?"
+                condition_val.append(offset)
+
             with self._lock:
-                self._cur.execute(f"""
-                SELECT {column} FROM {self._name}
-                    WHERE {condition_clause}
-                """, condition_val)
+                self._cur.execute(sql, condition_val)
 
                 rows = self._cur.fetchall()
                 rows = [dict(row) for row in rows]
@@ -156,7 +178,6 @@ class User(Base):
             "pfp":["BLOB"],
             "is_admin": ["BOOLEAN", "DEFAULT 0"],
             "is_banned": ["BOOLEAN", "DEFAULT 0"],
-            "report_id": ["INTEGER", "UNIQUE"],
             "create_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"],
             "modify_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"]
         }
@@ -165,8 +186,9 @@ class User(Base):
 
     # auto update after update
     def _trigger_update_modify_time(self):
+        print("in trigger")
         self._cur.execute("""
-            CREATE TRIGGER update_user_modify_time
+            CREATE TRIGGER IF NOT EXISTS update_user_modify_time
             AFTER UPDATE ON user
             FOR EACH ROW
             WHEN OLD.modify_time = NEW.modify_time
@@ -219,28 +241,23 @@ class User(Base):
         return super()._insert_data(param)
     
     # get
-    def get_user_profile(self, user_name:str)->tuple[bool, dict|str]:
-        res = self._select_data("user_name=?", [user_name], 
-        ["email", "phone", "age", "address", "first_name", "last_name", 
-         "location", "profile", "pfp"])
+    def get_user_info(self, user_name:str=None, user_id:int=None, email:str=None)->tuple[bool, dict|str]:
+        if user_name is None and user_id is None and email is None:
+            return False, "please enter either user_name, user_id or email to get user info"
+        fields = ["user_id", "user_name", "email", "phone", "age", "address", "first_name", "last_name", 
+        "location", "profile", "pfp", "is_admin", "is_banned", "create_time", "modify_time"]
+        if user_name:
+            res = self._select_data("user_name=?", [user_name], fields)
+        elif user_id:
+            res = self._select_data("user_id=?", [user_id], fields)
+        elif email:
+            res = self._select_data("email=?", [email], fields)
+
         if not res[0]:
             return res
         
         return True, res[1][0]
     
-    def if_user_banned(self, user_name:str)->tuple[bool, bool|str]:
-        res = self._select_data("user_name=?", [user_name], ["is_banned"])
-        if not res[0]:
-            return res
-        
-        return True, bool(res[1][0]["is_banned"])
-
-    def get_user_id(self, user_name:str)->tuple[bool, int|str]:
-        res = self._select_data("user_name=?", [user_name], ["user_id"])
-        if not res[0]:
-            return res
-        return True, res[1][0]["user_id"]
-
     # log in
     def verify_password(self, user_name:str, password:str)->tuple[bool, str]:
         try:
@@ -290,8 +307,11 @@ class User(Base):
     def unban_user(self, user_name:str)->tuple[bool, str]:
         return self._update_data({"is_banned":0}, "user_name=?", [user_name])
 
+    def get_all_banned_user(self)->tuple[bool, list]:
+        return self._select_data("is_banned", [1], order_by="modify_time")
+    
     # delete account
-    def delete_user(self, user_name:str):
+    def delete_user(self, user_name:str)->tuple[bool, str]:
         return self._delete_data(f"user_name=?", [user_name])
 
 class Post(Base):
@@ -305,6 +325,22 @@ class Post(Base):
             "modify_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"],
         }
         super().__init__(cur=cur, conn=conn, name="post", field=field)
+        self._trigger_update_modify_time()
+
+    # auto update after update
+    def _trigger_update_modify_time(self):
+        self._cur.execute("""
+            CREATE TRIGGER IF NOT EXISTS update_post_modify_time
+            AFTER UPDATE ON post
+            FOR EACH ROW
+            WHEN OLD.modify_time = NEW.modify_time
+            BEGIN
+                UPDATE user
+                SET modify_time = CURRENT_TIMESTAMP
+                WHERE post_id = OLD.post_id;
+            END;
+        """)
+        self._conn.commit()
 
     def create_post(self, title:str, description:str, owner_id:int):
         return self._insert_data({"title":title, "description":description, "owner_id":owner_id})
