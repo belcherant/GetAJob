@@ -6,7 +6,8 @@ DB_PATH = "test.db"
 DEFULT_TAGS = ["test1", "test2", "test3", "test4", "test5"]
     
 class Base:
-    def __init__(self, cur:sqlite3.Cursor, conn:sqlite3.Connection, name:str, field:dict):
+    def __init__(self, cur:sqlite3.Cursor, conn:sqlite3.Connection, name:str, field:dict, debug:bool=False):
+        self.debug = debug
         self._lock = threading.Lock()
         self._cur = cur
         self._conn = conn
@@ -93,12 +94,14 @@ class Base:
             self._conn.rollback()
             return False, error_msg
 
-    def _select_data(self, condition_clause:str="1=1", condition_val:list=[], 
+    def _select_data(self, condition_clause:str="1=1", condition_val:list=None, 
                      column:list[str]=["*"], order_by:str=None, limit:int=None, desc:bool=False, offset:int=None)->tuple[bool, list[dict]|str]:
-        
         try:
+            if condition_val is None:
+                condition_val = []
+
             column = ", ".join(column)
-            sql = f"SELECT {column} FROM {self._name} WHERE {condition_clause}"
+            sql = f"SELECT {column} FROM {self._name} WHERE {condition_clause} "
 
             # select with order
             if order_by:
@@ -119,6 +122,12 @@ class Base:
             if offset:
                 sql += "OFFSET ?"
                 condition_val.append(offset)
+
+            if self.debug:
+                print("---- debug msg ----")
+                print(f"select sql: {sql}")
+                print(f"var: {condition_val}")
+                print("----------------")
 
             with self._lock:
                 self._cur.execute(sql, condition_val)
@@ -147,22 +156,24 @@ class Base:
             set_val = list(new_data.values())
             
             val = set_val+condition_val
+            sql = f"UPDATE {self._name} SET {set_clause} WHERE {condition_clause}"
+            if self.debug:
+                print("---- debug msg ----")
+                print(sql, val)
+                print("----------------")
             with self._lock:
-                self._cur.execute(f"""
-                UPDATE {self._name} SET {set_clause}
-                WHERE {condition_clause}
-                """, val)
+                self._cur.execute(sql, val)
                 self._conn.commit()
             return True, "success"
         
         except sqlite3.Error as e:
-            error_msg = f"[WARN] update failed: {e}"
+            error_msg = f"update failed: {e}"
             # add logger later
             self._conn.rollback()
             return False, error_msg
  
 class User(Base):
-    def __init__(self, cur, conn):
+    def __init__(self, cur, conn, debug):
         field = {
             "user_id": ["INTEGER", "PRIMARY KEY"],
             "user_name": ["TEXT", "UNIQUE", "NOT NULL"],
@@ -181,7 +192,7 @@ class User(Base):
             "create_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"],
             "modify_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"]
         }
-        super().__init__(cur=cur, conn=conn, field=field, name="user")
+        super().__init__(cur=cur, conn=conn, field=field, name="user", debug=debug)
         #self._trigger_update_modify_time()
 
     # auto update after update
@@ -308,48 +319,57 @@ class User(Base):
         return self._update_data({"is_banned":0}, "user_name=?", [user_name])
 
     def get_all_banned_user(self)->tuple[bool, list]:
-        return self._select_data("is_banned", [1], order_by="modify_time")
+        return self._select_data("is_banned=?", [1], column=["user_id", "user_name", "email"], order_by="modify_time")
     
     # delete account
-    def delete_user(self, user_name:str)->tuple[bool, str]:
-        return self._delete_data(f"user_name=?", [user_name])
-
+    def delete_user(self, user_name:str=None, user_id:str=None, email:str=None)->tuple[bool, str]:
+        if user_id is None and user_name is None and email is None:
+            return False, "please enter either user_name, user_id or email to delete user"
+        elif user_name:
+            return self._delete_data(f"user_name=?", [user_name])
+        elif user_id:
+            return self._delete_data(f"user_id=?", [user_id])
+        elif email:
+            return self._delete_data(f"email=?", [email])
+        
 class Post(Base):
-    def __init__(self, cur, conn):
+    def __init__(self, cur, conn, debug):
         field = {
             "post_id": ["INTEGER", "PRIMARY KEY"],
             "title": ["TEXT", "NOT NULL"],
             "description": ["TEXT", "NOT NULL"],
             "owner_id": ["INTEGER", "NOT NULL", "REFERENCES user(user_id) ON DELETE CASCADE"],
+            "location": ["TEXT"],
+            "budget": ["TEXT"],
             "create_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"],
             "modify_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"],
         }
-        super().__init__(cur=cur, conn=conn, name="post", field=field)
+        super().__init__(cur=cur, conn=conn, name="post", field=field, debug=debug)
         self._trigger_update_modify_time()
 
     # auto update after update
     def _trigger_update_modify_time(self):
-        self._cur.execute("""
+        self._cur.execute(f"""
             CREATE TRIGGER IF NOT EXISTS update_post_modify_time
             AFTER UPDATE ON post
             FOR EACH ROW
             WHEN OLD.modify_time = NEW.modify_time
             BEGIN
-                UPDATE user
+                UPDATE post
                 SET modify_time = CURRENT_TIMESTAMP
                 WHERE post_id = OLD.post_id;
             END;
         """)
         self._conn.commit()
 
-    def create_post(self, title:str, description:str, owner_id:int):
-        return self._insert_data({"title":title, "description":description, "owner_id":owner_id})
+    def create_post(self, title:str, description:str, owner_id:int, location:str=None, budget:str=None):
+        return self._insert_data({"title":title, "description":description, "owner_id":owner_id, "location":location, "budget":budget})
 
     def delete_post(self, post_id:int):
         return self._delete_data("post_id=?", [post_id])
 
-    def update_post(self, post_id:int, title:str=None, description:str=None):
-        return self._update_data({"title":title, "description":description}, "post_id=?", [post_id])
+    def update_post(self, post_id:int, title:str=None, description:str=None, location:str=None, budget:str=None):
+        return self._update_data({"title":title, "description":description, "location":location, "budget":budget}, "post_id=?", [post_id])
 
     def select_post(self, post_id:int):
         return self._select_data("post_id=?", [post_id])
@@ -357,11 +377,11 @@ class Post(Base):
     def select_user_post(self, user_id:int):
         return self._select_data("owner_id=?", [user_id])
 
-    def get_latest_n_post(self, n:int=10):
-        return self._select_data()
+    def select_latest_n_posts(self, n:int=10, offset:int=0, tags:list=None, key_words:list=None):
+        return self._select_data(order_by="modify_time", limit=n, offset=offset)
     
 class Message(Base):
-    def __init__(self, cur, conn):
+    def __init__(self, cur, conn, debug):
         field = {
             "message_id":["INTEGER", "PRIMARY KEY"],
             "sender_id":["INTEGER", "NOT NULL", "REFERENCES user(user_id)"],
@@ -370,7 +390,7 @@ class Message(Base):
             "message":["TEXT", "NOT NULL"],
             "timestamp":["DATETIME", "DEFAULT CURRENT_TIMESTAMP"],
         }
-        super().__init__(cur=cur, conn=conn, name="message", field=field)
+        super().__init__(cur=cur, conn=conn, name="message", field=field, debug=debug)
 
     def get_chat_room(self, user1:int, user2:int):
         return self._select_data("(sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?)", [user1, user2, user2, user1])
@@ -382,14 +402,14 @@ class Message(Base):
         return self._insert_data({"sender_id":sender_id, "receiver_id":receiver_id, "message":msg})
     
 class Post_tag(Base):
-    def __init__(self, cur, conn):
+    def __init__(self, cur, conn, debug):
         field = {
             "post_id": ["INTEGER", "NOT NULL", "REFERENCES post(post_id) ON DELETE CASCADE"],
             "tag_id": ["INTEGER", "NOT NULL", "REFERENCES tag(tag_id) ON DELETE CASCADE"],
             "PRIMARY KEY": ["(post_id, tag_id)"]
         }
 
-        super().__init__(cur=cur, conn=conn, name="post_tag", field=field)
+        super().__init__(cur=cur, conn=conn, name="post_tag", field=field, debug=debug)
 
     def add_tag_to_post(self, post_id:int, tag_id:int):
         return self._insert_data({"post_id":post_id, "tag_id":tag_id})
@@ -404,13 +424,13 @@ class Post_tag(Base):
         return True, [val["post_id"] for val in res[1]]
     
 class Tag(Base):
-    def __init__(self, cur, conn):
+    def __init__(self, cur, conn, debug):
         field = {
             "tag_id": ["INTEGER", "PRIMARY KEY"],
             "tag_name": ["TEXT", "UNIQUE", "NOT NULL"]
         }
 
-        super().__init__(cur=cur, conn=conn, name="tag", field=field)
+        super().__init__(cur=cur, conn=conn, name="tag", field=field, debug=debug)
 
         # load defult tag
         for tag in DEFULT_TAGS:
@@ -429,13 +449,13 @@ class Tag(Base):
         return True, res[1][0]["tag_id"]
     
 class User_report(Base):
-    def __init__(self, cur, conn):
+    def __init__(self, cur, conn, debug):
         field = {
             "report_id": ["INTEGER", "PRIMARY KEY"],
             "user_id": ["INTEGER", "NOT NULL", "REFERENCES user(user_id)"],
             "description": ["TEXT", "NOT NULL"]
         }
-        super().__init__(cur=cur, conn=conn, name="user_report", field=field)
+        super().__init__(cur=cur, conn=conn, name="user_report", field=field, debug=debug)
 
     # user
     def report_user(self, user_id:int, description:str)->tuple[bool, str]:
@@ -453,7 +473,7 @@ class User_report(Base):
 
 
 class Database_api:
-    def __init__(self, db_path:str=DB_PATH):
+    def __init__(self, db_path:str=DB_PATH, debug:bool = False):
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
 
         # set return sqlite3.Row objects when selecting
@@ -462,12 +482,12 @@ class Database_api:
         self._cur = self._conn.cursor()
 
         # load all table
-        self.tag = Tag(self._cur, self._conn)
-        self.user = User(self._cur, self._conn)
-        self.message = Message(self._cur, self._conn)
-        self.post = Post(self._cur, self._conn)
-        self.post_tag = Post_tag(self._cur, self._conn)
-        self.report = User_report(self._cur, self._conn)
+        self.tag = Tag(self._cur, self._conn, debug)
+        self.user = User(self._cur, self._conn, debug)
+        self.message = Message(self._cur, self._conn, debug)
+        self.post = Post(self._cur, self._conn, debug)
+        self.post_tag = Post_tag(self._cur, self._conn, debug)
+        self.report = User_report(self._cur, self._conn, debug)
 
         # enforce foreign key after load all tables
         self._conn.execute("PRAGMA foreign_keys = ON;")
