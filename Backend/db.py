@@ -161,7 +161,7 @@ class User(Base):
             "modify_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"]
         }
         super().__init__(cur=cur, conn=conn, field=field, name="user")
-        self._trigger_update_modify_time()
+        #self._trigger_update_modify_time()
 
     # auto update after update
     def _trigger_update_modify_time(self):
