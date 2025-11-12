@@ -3,11 +3,13 @@ from db import Database_api
 import os
 # test data
 JOB_DATA = [
-    {"id": 1, "title": "Frontend Developer", "description": "Build UI with HTML/CSS/JS."},
-    {"id": 2, "title": "Backend Developer", "description": "APIs with Python + Flask."},
-    {"id": 3, "title": "Data Analyst", "description": "SQL, charts, and insights."},
-    {"id": 4, "title": "UX Designer", "description": "Design flows and prototypes."},
+    {"post_id": 1, "title": "Frontend Developer", "description": "Build UI with HTML/CSS/JS.", "owner_id": "2", "location": "1300 65th St"},
+    {"post_id": 2, "title": "Backend Developer", "description": "APIs with Python + Flask.", "owner_id": "2", "location": "1300 65th St"},
+    {"post_id": 3, "title": "Data Analyst", "description": "SQL, charts, and insights.", "owner_id": "3", "location": "1305 64th St"},
+    {"post_id": 4, "title": "UX Designer", "description": "Design flows and prototypes.", "owner_id": "1", "location": "6655 Elvas Ave"},
+    {"post_id": 5, "title": "UX Designer", "description": "Design flows and prototypes.", "owner_id": "1", "location": "6655 Elvas Ave"},
 ]
+
 
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -56,11 +58,19 @@ def signup():
 def jobs():
     q = request.args.get('q', '').strip().lower()
     jobs = JOB_DATA
+
+    sorted_list = sorted(jobs, key=lambda x: x['owner_id'])
+    page_num = int(request.args.get('page', 1)) # Get current page from URL
+    items_per_page = 3
+    start_index = (page_num - 1) * items_per_page
+    end_index = start_index + items_per_page
+    paginated_data = sorted_list[start_index:end_index]
+
     if q:
         jobs = [j for j in JOB_DATA
                 if q in j["title"].lower() or q in j["description"].lower()]
 
-    return render_template('jobs.html', jobs=jobs, title='Jobs')
+    return render_template('jobs.html', jobs=paginated_data, title='Jobs')
 
 @app.route('/job/<int:job_id>')
 def job_detail(job_id):
