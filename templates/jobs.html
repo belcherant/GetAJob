@@ -67,6 +67,19 @@
           {% else %}
             <div class="empty">No jobs found.</div>
           {% endif %}
+          <div class="pages">
+            <form {% if hide_prev %} class="hidden-but-takes-space" {% endif %} method="get" action="/jobs" class="page-button">
+              <input type="hidden" id="page" name="page" value="{{ page_num - 1 }}">
+              <button type="submit">Previous Page</button>
+            </form>
+            
+            <p>pagestuffs {{ page_num }}</p>
+
+            <form {% if hide_next %} class="hidden-but-takes-space" {% endif %} method="get" action="/jobs" class="page-button">
+              <input type="hidden" id="page" name="page" value="{{ page_num + 1 }}">
+              <button type="submit">Next Page</button>
+            </form>
+          </div>
         </main>
       </div>
     </div>

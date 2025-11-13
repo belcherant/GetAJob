@@ -130,6 +130,15 @@ body {
   color: #214;
 }
 
+.pages {
+  display: grid;
+  grid-template-columns: 1fr 4fr 1fr;
+}
+
+.hidden-but-takes-space {
+  visibility: hidden;
+}
+
 .job-title { color: var(--brand); }
 .job-desc { margin-top: 6px; color: #334; }
 .empty { padding: 18px; color: #666; }

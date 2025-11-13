@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from db import Database_api
 import os
+import math
 # test data
 JOB_DATA = [
     {"post_id": 1, "title": "Frontend Developer", "description": "Build UI with HTML/CSS/JS.", "owner_id": "2", "location": "1300 65th St"},
@@ -66,11 +67,15 @@ def jobs():
     end_index = start_index + items_per_page
     paginated_data = sorted_list[start_index:end_index]
 
+    hide_prev = page_num == 1
+    hide_next = page_num == math.ceil( len(JOB_DATA) / items_per_page )
+    #max_page = math.ceil( len(JOB_DATA) / items_per_page )
+
     if q:
         jobs = [j for j in JOB_DATA
                 if q in j["title"].lower() or q in j["description"].lower()]
 
-    return render_template('jobs.html', jobs=paginated_data, title='Jobs')
+    return render_template('jobs.html', jobs=paginated_data, title='Jobs', page_num=page_num, hide_prev=hide_prev, hide_next=hide_next)
 
 @app.route('/job/<int:job_id>')
 def job_detail(job_id):
