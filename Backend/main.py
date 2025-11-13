@@ -69,7 +69,6 @@ def jobs():
 
     hide_prev = page_num == 1
     hide_next = page_num == math.ceil( len(JOB_DATA) / items_per_page )
-    #max_page = math.ceil( len(JOB_DATA) / items_per_page )
 
     if q:
         jobs = [j for j in JOB_DATA
