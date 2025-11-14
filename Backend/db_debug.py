@@ -2,6 +2,7 @@ from db import Database_api, DB_PATH
 import random
 import os
 
+
 def delete_db():
     if os.path.exists(DB_PATH):
         os.remove(DB_PATH)
