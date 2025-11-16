@@ -1,16 +1,22 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
-from db import Database_api
+from db import Database_api, DB_PATH
 import os
 import math
+
 # test data
 JOB_DATA = [
-    {"post_id": 1, "title": "Frontend Developer", "description": "Build UI with HTML/CSS/JS.", "owner_id": "2", "location": "1300 65th St"},
-    {"post_id": 2, "title": "Backend Developer", "description": "APIs with Python + Flask.", "owner_id": "2", "location": "1300 65th St"},
-    {"post_id": 3, "title": "Data Analyst", "description": "SQL, charts, and insights.", "owner_id": "3", "location": "1305 64th St"},
-    {"post_id": 4, "title": "UX Designer", "description": "Design flows and prototypes.", "owner_id": "1", "location": "6655 Elvas Ave"},
-    {"post_id": 5, "title": "UX Designer", "description": "Design flows and prototypes.", "owner_id": "1", "location": "6655 Elvas Ave"},
+    {"title": "Frontend Developer", "description": "Build UI with HTML/CSS/JS.", "owner_id": "2", "location": "1300 65th St"},
+    {"title": "Backend Developer", "description": "APIs with Python + Flask.", "owner_id": "2", "location": "1300 65th St"},
+    {"title": "Data Analyst", "description": "SQL, charts, and insights.", "owner_id": "3", "location": "1305 64th St"},
+    {"title": "UX Designer", "description": "Design flows and prototypes.", "owner_id": "1", "location": "6655 Elvas Ave"},
+    {"title": "UX Designer", "description": "Design flows and prototypes.", "owner_id": "1", "location": "6655 Elvas Ave"},
 ]
 
+USER_DATA = [
+    {"user_name": "chen", "email":"chenwang@csus.edu", "password":"asdfasdf"},
+    {"user_name": "miles", "email":"mboyle@csus.edu", "password":"asdfasdf"},
+    {"user_name":"jared", "email":"jaredshicks@csus.edu", "password":"asdfasdf"}
+]
 
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -18,6 +24,20 @@ db = Database_api()
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 app.secret_key = os.urandom(24)
 # demo data (swap for DB later)
+
+
+# add to database
+def add_data():
+    for user in USER_DATA:
+        res = db.user.create_account(user["user_name"], user["password"], user["email"])
+        print(res)
+
+    for job in JOB_DATA:
+        res = db.post.create_post(job["title"], job["description"], job["owner_id"], job["location"])
+        print(res)
+
+
+add_data()
 
 
 @app.route('/')
@@ -58,18 +78,17 @@ def signup():
 @app.route('/jobs')
 def jobs():
     q = request.args.get('q', '').strip().lower()
-    jobs = JOB_DATA
-
-    sorted_list = sorted(jobs, key=lambda x: x['owner_id'])
     page_num = int(request.args.get('page', 1)) # Get current page from URL
     items_per_page = 3
     start_index = (page_num - 1) * items_per_page
-    end_index = start_index + items_per_page
-    paginated_data = sorted_list[start_index:end_index]
 
+    # test with database
+    paginated_data = db.post.select_latest_n_posts(items_per_page+1, start_index)[1]
     hide_prev = page_num == 1
-    hide_next = page_num == math.ceil( len(JOB_DATA) / items_per_page )
+    hide_next = len(paginated_data)<=items_per_page
+    paginated_data = paginated_data[:-1]
 
+    # hide_next = page_num == math.ceil( len(JOB_DATA) / items_per_page )
     if q:
         jobs = [j for j in JOB_DATA
                 if q in j["title"].lower() or q in j["description"].lower()]
